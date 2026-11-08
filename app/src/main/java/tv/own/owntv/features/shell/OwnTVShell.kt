@@ -318,6 +318,11 @@ fun OwnTVShell(
     }.collectAsStateWithLifecycle(emptyList())
     // In-player channel-list overlay (Left while controls hidden, live only).
     var showChannelList by remember { mutableStateOf(false) }
+    // Receiver-style channel surfing: the first OK selects/tunes; a second OK on that same
+    // channel dismisses the list. Reset the tap sequence whenever the list is reopened.
+    var lastChannelListSelectionId by remember {
+        mutableStateOf<Long?>(null)
+    }
     // In-player watch-history list (Right while controls hidden, live only).
     var showHistoryList by remember { mutableStateOf(false) }
     // Multiview: the grid, while it is up, and which tile is waiting for a channel to be picked.
@@ -459,6 +464,11 @@ fun OwnTVShell(
     DisposableEffect(watchingSourceId) {
         watchingSourceId?.let { watchSession.open(it) }
         onDispose { watchingSourceId?.let { watchSession.close(it) } }
+    }
+    LaunchedEffect(showChannelList) {
+        if (showChannelList) {
+            lastChannelListSelectionId = null
+        }
     }
     // Current programme per channel for the in-player channel list overlay (small subtitle under each row).
     // Only resolved while the overlay is actually open. Keyed on the channel set so a zap-list change re-resolves.
@@ -1973,7 +1983,19 @@ fun OwnTVShell(
                             playlistMarks = overlayPlaylistMarks,
                             title = zapOverlayTitle,
                             showNumbers = directTuneEnabled,
-                            onSelect = { liveVm.ensurePlaying(it); showChannelList = false },
+onSelect = { channel ->
+    val isSecondClickOnSameChannel =
+        lastChannelListSelectionId == channel.id
+
+    liveVm.ensurePlaying(channel)
+
+    if (isSecondClickOnSameChannel) {
+        showChannelList = false
+        lastChannelListSelectionId = null
+    } else {
+        lastChannelListSelectionId = channel.id
+    }
+},
                             onDismiss = { showChannelList = false },
                             onOpenCategories = { liveVm.openChannelBrowser() },
                             modifier = Modifier.fillMaxSize(),
